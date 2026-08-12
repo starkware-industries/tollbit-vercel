@@ -34,7 +34,6 @@ export const HTTP_OK = 200;
  * HTML injected instead of the CDN handing back an empty SPA shell.
  */
 export const CLIENT_ASSET_DIR = 'public';
-export const SHELL_HTML_PATH = 'dist/shell/index.html';
 
 export const TOLLBIT_PUBLISHER_DASHBOARD = 'https://app.tollbit.com';
 

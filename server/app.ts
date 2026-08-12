@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import express, { type Express } from 'express';
 import type { PlaygroundConfig } from '../shared/config';
@@ -8,7 +7,6 @@ import {
   CLIENT_ASSET_DIR,
   ORIGIN_CATALOG_PATH,
   ORIGIN_CONTENT_PATH,
-  SHELL_HTML_PATH,
   TOLLBIT_PUBLISHER_DASHBOARD,
 } from '../shared/constants';
 import { crawlAsAgent } from '../agent/crawler';
@@ -17,12 +15,10 @@ import { articleSlug, renderPage } from './render';
 import { clearTraffic, listTraffic } from './traffic';
 
 /**
- * Resolved with a runtime value so bundlers (Vercel's included) don't trace Vite — a
- * devDependency — into the production function bundle.
+ * Routes only — the client is mounted by the caller, because production and dev mount it
+ * very differently and only the dev path may touch Vite.
  */
-const DEV_SERVER_MODULE = process.env.DEV_SERVER_MODULE ?? 'vite';
-
-export async function createApp(config: PlaygroundConfig, isProduction: boolean): Promise<Express> {
+export function createApp(config: PlaygroundConfig, isProduction: boolean): Express {
   const app = express();
   app.use(express.json());
   app.use(botGate(config));
@@ -133,34 +129,19 @@ export async function createApp(config: PlaygroundConfig, isProduction: boolean)
     }
   });
 
-  await mountClient(app, isProduction);
   return app;
 }
 
-async function mountClient(app: Express, isProduction: boolean): Promise<void> {
-  if (isProduction) {
-    // On Vercel the CDN serves public/** and express.static is ignored; this is for
-    // running the production build anywhere else.
-    app.use(express.static(resolve(process.cwd(), CLIENT_ASSET_DIR), { index: false }));
-    const template = readFileSync(resolve(process.cwd(), SHELL_HTML_PATH), 'utf8');
-    app.get('/{*path}', (req, res) => {
-      res.type('html').send(renderPage(template, req.originalUrl));
-    });
-    return;
-  }
-
-  const { createServer } = (await import(DEV_SERVER_MODULE)) as typeof import('vite');
-  const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
-  app.use(vite.middlewares);
-  app.get('/{*path}', async (req, res, next) => {
-    try {
-      const raw = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
-      const template = await vite.transformIndexHtml(req.originalUrl, raw);
-      res.type('html').send(renderPage(template, req.originalUrl));
-    } catch (error) {
-      vite.ssrFixStacktrace(error as Error);
-      next(error);
-    }
+/**
+ * `shellHtml` is passed in rather than read here so the only filesystem read of build
+ * output lives in the entrypoint, where Vercel's file tracer can see it.
+ */
+export function mountProductionClient(app: Express, shellHtml: string): void {
+  // On Vercel the CDN serves public/** and express.static is ignored; this is for running
+  // the production build anywhere else.
+  app.use(express.static(resolve(process.cwd(), CLIENT_ASSET_DIR), { index: false }));
+  app.get('/{*path}', (req, res) => {
+    res.type('html').send(renderPage(shellHtml, req.originalUrl));
   });
 }
 

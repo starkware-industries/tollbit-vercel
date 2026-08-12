@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n tollbooth,origin -c magenta,cyan \"pnpm dev:tollbooth\" \"pnpm dev:origin\"",
-    "dev:origin": "tsx watch server.ts",
+    "dev:origin": "tsx watch server/dev.ts",
     "dev:tollbooth": "tsx watch server/tollbooth/index.ts",
     "build": "vite build && node scripts/postbuild.mjs",
     "start": "NODE_ENV=production concurrently -n tollbooth,origin -c magenta,cyan \"tsx server/tollbooth/index.ts\" \"tsx server.ts\"",

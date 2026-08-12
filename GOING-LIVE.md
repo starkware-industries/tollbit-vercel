@@ -190,14 +190,36 @@ Items 4, 5, 8 and 14 are the ones that actually break if skipped.
 
 ## Vercel notes
 
-Four things in this repo exist specifically because of how Vercel runs an Express app. If
+Five things in this repo exist specifically because of how Vercel runs an Express app. If
 you refactor, don't undo them.
+
+### `framework: "express"` must stay pinned in `vercel.json`
+This is the one that bites. Because `vite.config.ts` and `vite` are in the repo, Vercel's
+auto-detection classifies the project as **Vite** and builds it as a static SPA: it looks
+for `index.html` in `dist/`, finds none (the build puts assets in `public/` and the shell in
+`dist/shell/`), never creates a function from `server.ts`, and every route 404s. The build
+succeeds, which makes it look like a routing problem rather than a preset problem.
+
+Pinning `"framework": "express"` in `vercel.json` overrides the dashboard's Framework
+Preset, so no dashboard change is needed. If you ever see a blanket 404 on a green build,
+check this first:
+
+```bash
+# should print "express", not "vite"
+curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v9/projects/tollbit-vercel?teamId=$TEAM_ID" | jq .framework
+```
 
 ### The entrypoint must be `server.ts` at the root
 Vercel only detects a server entrypoint at `app.*`, `index.*` or `server.*` in the root or
 in `src/`. A directory called `server/` containing `index.ts` is **not** detected. So
 `server.ts` at the root builds the app and both calls `app.listen()` and default-exports
 it; the real routes live in `server/app.ts`.
+
+It is also deliberately **synchronous, with no top-level `await`** — the platform wraps this
+module's default export, so the app must exist by the time evaluation finishes. The dev
+server needs an async Vite instance, which is why dev has its own entrypoint at
+`server/dev.ts`.
 
 ### `express.static()` does nothing on Vercel
 Documented limitation: static assets must be in `public/**`, served by the CDN. So Vite
@@ -217,11 +239,17 @@ Verify after any build change:
 curl -s https://yourdomain.com/articles/anatomy-of-a-402 | grep -c '<h1>Anatomy'   # want 1
 ```
 
-### Vite is imported by a runtime-resolved name
-`server/app.ts` imports the dev server via `process.env.DEV_SERVER_MODULE ?? 'vite'` rather
-than a literal. A literal `await import('vite')` would be statically traced into the
-production function bundle even though production never runs it — and Vite is a
-devDependency.
+### Vite is only reachable from `server/dev.ts`
+Nothing imported by `server.ts` touches Vite, so it can't be traced into the production
+function bundle — which matters because Vite is a devDependency and wouldn't be installed at
+runtime. Keep the dev-only wiring in `server/dev.ts`.
+
+Conversely, the built shell **must** be traced *in*. `server.ts` reads it as
+`new URL('./dist/shell/index.html', import.meta.url)` rather than a `process.cwd()` join,
+because the URL form is statically analyzable and a runtime-assembled path may not be. If a
+deploy ever fails with `ENOENT .../dist/shell/index.html`, that read stopped being
+analyzable — add `functions: { "server.ts": { "includeFiles": "dist/shell/**" } }` to
+`vercel.json`.
 
 ### What does not survive serverless
 - **The mock ledger** wrote to `data/ledger.json`. Serverless filesystems are read-only, so

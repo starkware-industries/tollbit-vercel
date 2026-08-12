@@ -2,6 +2,7 @@ import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const BUILT_SHELL = resolve('public/index.html');
+// Must match the path server.ts reads.
 const SHELL_DESTINATION = resolve('dist/shell/index.html');
 
 mkdirSync(dirname(SHELL_DESTINATION), { recursive: true });
