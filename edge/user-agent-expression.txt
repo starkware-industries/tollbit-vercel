@@ -1,0 +1,1 @@
+(ChatGPT-User|OAI-SearchBot|GPTBot|PerplexityBot|Perplexity-User|anthropic-ai|ClaudeBot|Claude-Web|Claude-User|Claude-SearchBot|CCBot|cohere-ai|YouBot|Diffbot|meta-externalagent|Timpibot|Amazonbot|Bytespider)
